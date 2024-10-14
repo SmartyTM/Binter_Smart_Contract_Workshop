@@ -25,6 +25,71 @@ parameters = [
    ),
 ]
 
+# Parametros Adicionales
+   Parameter(
+       name="overdraft_limit",
+       shape=NumberShape(),
+       level=ParameterLevel.TEMPLATE,
+       description="Limite de Sobregiro",
+       display_name="Sobregiro maximo permitido para esta cuenta",
+       default_value=Decimal(100),
+   ),
+   Parameter(
+       name="overdraft_fee",
+       shape=NumberShape(),
+       level=ParameterLevel.TEMPLATE,
+       description="Tasa por Sobregiro",
+       display_name="Tarifa cobrada sobre saldos que excedan el limite de sobregiro",
+       default_value=Decimal(20),
+   ),
+
+# Helper functions
+def _get_overdraft_fee_postings(overdraft_fee, denomination):
+   posting_instructions = _make_internal_transfer_instructions(
+       amount=overdraft_fee,
+       denomination=denomination,
+       from_account_id="main_account", # vault.account_id
+       to_account_id="internal_account",
+   )
+   return posting_instructions
+
+def _make_internal_transfer_instructions(
+   amount: Decimal,
+   denomination: str,
+   from_account_id: str,
+   to_account_id: str,
+   from_account_address: str = DEFAULT_ADDRESS,
+   to_account_address: str = DEFAULT_ADDRESS,
+   asset: str = DEFAULT_ASSET,
+)  -> list[CustomInstruction]:
+   postings = [
+       Posting(
+           credit=True,
+           amount=amount,
+           denomination=denomination,
+           account_id=to_account_id,
+           account_address=to_account_address,
+           asset=asset,
+           phase=Phase.COMMITTED,
+       ),
+       Posting(
+           credit=False,
+           amount=amount,
+           denomination=denomination,
+           account_id=from_account_id,
+           account_address=from_account_address,
+           asset=asset,
+           phase=Phase.COMMITTED,
+       ),
+   ]
+   custom_instruction = CustomInstruction(
+       postings=postings,
+   )
+
+
+   return [custom_instruction]
+
+
 # Decorador que indica que este hook requiere acceso a parámetros
 @requires(parameters=True)
 def pre_posting_hook(

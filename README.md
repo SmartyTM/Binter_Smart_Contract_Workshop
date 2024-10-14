@@ -2,148 +2,109 @@
 Javier Antoniucci & Luis Gómez - GFT
 ---
 
-# Ejercicio Tres - Entendiendo los Parámetros y los Requisitos de Hooks
+# Ejercicio Cuatro - Entendiendo las directivas de hooks y los recolectores de datos
+En este ejercicio, cobramos una comisión si el saldo de la cuenta excede un límite de sobregiro.
 
-En este ejercicio, cambiamos la restricción de denominación para que sea configurable en lugar de estar codificada de forma fija.
+## Antecedentes
+Cada hook tiene su propio tipo de retorno, lo cual le permite comunicar los resultados de la lógica de negocio al resto de Vault. La mayoría de estos tipos de retorno pueden contener directivas, permitiendo que los hooks afecten el estado de Vault al crear publicaciones, enviar notificaciones o modificar horarios. Sin embargo, el pre-posting hook se considera estar en la "ruta caliente" (hot path), lo que significa que su ejecución debe ser lo más rápida posible. Por esta razón, sus valores de retorno se limitan a rechazos y no contienen directivas.
 
+Además de los parámetros, los Smart Contracts suelen necesitar acceder a otros datos, como saldos y publicaciones. La recuperación optimizada de datos nos permite definir de manera precisa qué datos se necesitan, ayudando a mantener la lógica de negocio compacta y mejorando el rendimiento al garantizar que el contrato solo recupere los datos que son necesarios para su ejecución.
 
-## Definición de Parámetros en Smart Contracts
-En Thought Machine Vault, los parámetros son valores configurables que **permiten ajustar la lógica de negocio de un Smart Contract sin necesidad de modificar el código directamente.** Los parámetros se definen en el contrato y luego se pueden establecer o actualizar durante la configuración del producto. Esto incluye, por ejemplo, valores como la denominación permitida, límites de transacción, o tasas de interés.
+El post-posting hook nos permite realizar acciones basadas en la lógica de negocio después de la ejecución de una publicación. Los recolectores de datos nos permiten definir qué intervalos de tiempo o puntos específicos en el tiempo son de interés para la lógica de negocio. En este ejercicio, agregamos una verificación al post-posting hook para cobrar una comisión al cliente si excede su límite de sobregiro. Necesitamos recuperar el saldo comprometido en el momento de la publicación para evaluar correctamente si la cuenta tiene sobregiro después de la publicación.
 
-Los parámetros son muy útiles para garantizar la flexibilidad y reutilización de los Smart Contracts, permitiendo adaptar un producto a diferentes condiciones sin tener que reescribir o redeployar el código.
+## Definición del Ejercicio
+Usa los parámetros ``overdraft_limit`` y ``overdraft_fee``, definidos a continuación, para hacer la lógica de nuestro producto configurable.
 
-El ejercicio comienza con añadiendo este bloque de código a nuestro ```tutorial_contract.py``` que estamos usando para estos ejercicios :
+- ``overdraft_limit``: Este parámetro define el límite máximo de sobregiro permitido para la cuenta. Es configurable para que podamos ajustar la cantidad de dinero que un cliente puede sobregirar antes de que se le apliquen comisiones. Esto nos permite personalizar el comportamiento del producto según las necesidades del cliente o las políticas del banco.
+
+- ``overdraft_fee``: Este parámetro establece la comisión que se cobrará cuando el saldo de la cuenta exceda el límite de sobregiro definido. Al hacer este parámetro configurable, podemos ajustar el costo del sobregiro de acuerdo con las condiciones de mercado, regulaciones, o el perfil de riesgo del cliente.
 
 ```python
-from typing import Union
-from contracts_api import (
-   PrePostingHookArguments,
-   PrePostingHookResult,
-   Rejection,
-   RejectionReason,
-)
+# Parametros Adicionales
+   Parameter(
+       name="overdraft_limit",
+       shape=NumberShape(),
+       level=ParameterLevel.TEMPLATE,
+       description="Limite de Sobregiro",
+       display_name="Sobregiro maximo permitido para esta cuenta",
+       default_value=Decimal(100),
+   ),
+   Parameter(
+       name="overdraft_fee",
+       shape=NumberShape(),
+       level=ParameterLevel.TEMPLATE,
+       description="Tasa por Sobregiro",
+       display_name="Tarifa cobrada sobre saldos que excedan el limite de sobregiro",
+       default_value=Decimal(20),
+   ),
+```
 
-# Definimos la versión del API que estamos utilizando para este Smart Contract, en este caso es la 4.0.0
-api = "4.0.0"  # Esto es un SmartContract usando el Contract Language API 4.0.0
+A continuación incluiremos un ``Helper``. 
+Un `Helper` tiene un papel clave en facilitar ciertas tareas repetitivas o complejas, ayudando a simplificar la lógica de negocio del contrato. Los helpers son funciones auxiliares diseñadas para encapsular funcionalidades comunes y permitir la reutilización del código, haciéndolo más limpio, mantenible y eficiente.
+Este Helper nos ayudará a poder transferir las tasas que se puedan recaudar de un saldo que ha excedido el límite de Sobregiro hasta una cuenta interna del banco.
 
-# Definimos la versión del contrato siguiendo las prácticas de versionado semántico
-version = "0.0.1"  # Usamos versionado semántico. Revisar las buenas prácticas para su uso en https://semver.org/
+```python
+# Helper functions
+def _get_overdraft_fee_postings(overdraft_fee, denomination):
+   posting_instructions = _make_internal_transfer_instructions(
+       amount=overdraft_fee,
+       denomination=denomination,
+       from_account_id="main_account", # vault.account_id
+       to_account_id="internal_account",
+   )
+   return posting_instructions
+```
 
-parameters = [
-  # Defina sus parámetros que precisa para poder pasar el valor de COP u otro tipo de moneda a su Smart Contract
-]
-@requires(parameters=True)
-def pre_posting_hook(
-  vault, hook_arguments: PrePostingHookArguments
-) -> Union[PrePostingHookResult, None]:
-   allowed_denomination = # ïndique que Denominación de moneda permite para su uso en este Smart Contract
-   if any(posting.denomination != allowed_denomination for posting in hook_arguments.posting_instructions):
-       return PrePostingHookResult(
-           rejection=Rejection(
-               message="Las transacciones solo pueden ser realizadas en Pesos Colombianos (COP)",
-               reason_code=RejectionReason.WRONG_DENOMINATION,
-           )
-       )
+y a continuación, añadiremos el bloque de código que creará los Postings (publicaciones en el ledger) de los movimientos que se generan del cobro de las tasas y se transfieren a una cuenta interna.
+
+```python
+def _make_internal_transfer_instructions(
+   amount: Decimal,
+   denomination: str,
+   from_account_id: str,
+   to_account_id: str,
+   from_account_address: str = DEFAULT_ADDRESS,
+   to_account_address: str = DEFAULT_ADDRESS,
+   asset: str = DEFAULT_ASSET,
+)  -> list[CustomInstruction]:
+   postings = [
+       Posting(
+           credit=True,
+           amount=amount,
+           denomination=denomination,
+           account_id=to_account_id,
+           account_address=to_account_address,
+           asset=asset,
+           phase=Phase.COMMITTED,
+       ),
+       Posting(
+           credit=False,
+           amount=amount,
+           denomination=denomination,
+           account_id=from_account_id,
+           account_address=from_account_address,
+           asset=asset,
+           phase=Phase.COMMITTED,
+       ),
+   ]
+   custom_instruction = CustomInstruction(
+       postings=postings,
+   )
+   return [custom_instruction]
 
 ```
 
-Compruebe que el ejercicio consta de insertar 2 bloques de código que permitan definir el parámetro y poder usarlo más adelante.
+El ejercicio tendrá como objetivo, usando todo el código expuesto anteriormente e incorporado al Smart Contract ``tutorial_contract.py``, implementar el ``post_posting_hook`` para realizar lo siguiente:
 
-Copie este código en ```tutorial_contract.py``` y añada los elementos que faltan.
+- **Recuperar los saldos** de la cuenta en el momento de la ejecución del hook mediante la definición de un data_fetcher, un concepto utilizado en los Smart Contracts de Thought Machine Vault para optimizar la recuperación de datos necesarios.
 
-Una vez tenga finalizado el código, ejecute el test en consola usando :
+- **Verificar si el saldo neto** COMPROMETIDO (en la dirección de cuenta DEFAULT_ADDRESS y del tipo de activo DEFAULT_ASSET) es mayor que el sobregiro permitido.
+
+- **Cobrar una comisión (Tasa)** si el saldo excede el sobregiro permitido, utilizando las funciones auxiliares proporcionadas.
+
+
+Una vez creado el código, utilice este comando de consola para poder comprobar que pasa los tests
 
 ```console
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_wrong_denomination_with_parameter_deposit
-```
-
-## Solución
-
-La solución tiene dos bloques de código que son necesarios.
-
-### Definición del parámetro
-
-```python
-parameters = [
-  Parameter(
-       name='denominacion',  # Nombre del parámetro, que se utilizará para identificarlo en el Smart Contract
-       shape=DenominationShape(),  # Forma del parámetro, especificando que se trata de una denominación monetaria
-       level=ParameterLevel.TEMPLATE,  # Nivel del parámetro, aquí se establece a nivel de plantilla (TEMPLATE)
-       default_value="COP",  # Valor por defecto del parámetro, que en este caso es 'COP' (Pesos Colombianos)
-   ),
-]
-```
-
-### Definir el suo del parámetro
-
-Como segundo paso, definir como usarlo dentro de nuestro anterior bloque de código añadiendo 
-
-```python
-    # Obtenemos el valor actual del parámetro 'denominacion' utilizando la serie temporal del parámetro
-    allowed_denomination = vault.get_parameter_timeseries(name="denomination").latest()
-```
-
----
-### Smart Contract Resultante 
-
-Si lo sumamos a todo el código anterior, nuestro Smart Contract luce de esta manera :
-
-
-```python
-from typing import Union
-from contracts_api import (
-   PrePostingHookArguments,
-   PrePostingHookResult,
-   Rejection,
-   RejectionReason,
-   Parameter,  # Importamos la clase Parameter para definir parámetros configurables
-   DenominationShape,  # Importamos la clase DenominationShape para definir la forma del parámetro de denominación
-   ParameterLevel,  # Importamos ParameterLevel para especificar el nivel del parámetro
-)
-
-# Definimos la versión del API que estamos utilizando para este Smart Contract, en este caso es la 4.0.0
-api = "4.0.0"  # Esto es un SmartContract usando el Contract Language API 4.0.0
-
-# Definimos la versión del contrato siguiendo las prácticas de versionado semántico
-version = "0.0.1"  # Usamos versionado semántico. Revisar las buenas prácticas para su uso en https://semver.org/
-
-# Definimos los parámetros del Smart Contract
-parameters = [
-  Parameter(
-       name='denominacion',  # Nombre del parámetro, que se utilizará para identificarlo en el Smart Contract
-       shape=DenominationShape(),  # Forma del parámetro, especificando que se trata de una denominación monetaria
-       level=ParameterLevel.TEMPLATE,  # Nivel del parámetro, aquí se establece a nivel de plantilla (TEMPLATE)
-       default_value="COP",  # Valor por defecto del parámetro, que en este caso es 'COP' (Pesos Colombianos)
-   ),
-]
-
-# Decorador que indica que este hook requiere acceso a parámetros
-@requires(parameters=True)
-def pre_posting_hook(
-  vault, hook_arguments: PrePostingHookArguments
-) -> Union[PrePostingHookResult, None]:
-    # Obtenemos el valor actual del parámetro 'denominacion' utilizando la serie temporal del parámetro
-    allowed_denomination = vault.get_parameter_timeseries(name="denomination").latest()
-    
-    # Verificamos si alguna de las publicaciones no está en la denominación permitida (obtenida del parámetro)
-    if any(posting.denomination != allowed_denomination for posting in hook_arguments.posting_instructions):
-        # Si alguna publicación no tiene la denominación permitida, devolvemos un resultado de rechazo
-        return PrePostingHookResult(
-            rejection=Rejection(
-                # Mensaje de rechazo que se muestra al usuario explicando el motivo
-                message="Las transacciones solo pueden ser realizadas en Pesos Colombianos (COP)",
-                # Código de razón para el rechazo, especificando que la denominación es incorrecta
-                reason_code=RejectionReason.WRONG_DENOMINATION,
-            )
-        )
-    # Si todas las publicaciones están en la denominación permitida, la función devuelve None y la transacción continúa normalmente
-
-```
-
-## Comprobación
-
-Por favor, ejecute el test de esta solución para comprobar su funcionamiento
-
-```console
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_wrong_denomination_with_parameter_deposit
+python3 -m unittest simple_tutorial_tests.TutorialTest.test_e04_fee_applied_after_withdrawal
 ```
