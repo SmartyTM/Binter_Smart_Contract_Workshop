@@ -1,4 +1,4 @@
-# Binter_Smart_Contract_Workshop
+# BINTEC - 
 
 
 # Ejercicio 1
@@ -17,4 +17,15 @@ Vamos a usar este comando en nuestro Terminal para poder realizar el primer test
 
 ```
 python3 -m unittest simple_tutorial_tests.TutorialTest.test_e01_unchallenged_deposit
+```
+
+## Resultado esperado
+
+```
+----------------------------------------------------------------------
+Ran 1 test in 0.170s
+
+
+OK 
+
 ```
