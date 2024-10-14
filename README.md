@@ -1,34 +1,5 @@
-# BINTEC - 
-
-
-# Ejercicio 1
-
-Vamos a comprobar como es un Smart Contract más pequeño posible y que nos permita probar que TM Vault está operativo.
-
-
-## Objetivo
-Para que un fichero puede ser considerado como un Smart Contract Válido, debe contener como mínimo esta metadata :
-
-- API Version
-- Contract Version
-
-## Uso
-Vamos a usar este comando en nuestro Terminal para poder realizar el primer test
-
-```
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_e01_unchallenged_deposit
-```
-
-## Resultado esperado
-
-```
-----------------------------------------------------------------------
-Ran 1 test in 0.170s
-
-
-OK 
-
-```
+# BINTEC - Taller de Smart Contracts
+Javier Antoniucci & Luis Gómez - GFT
 ---
 
 # Ejercicio 2 - Entendamos los hooks
@@ -62,6 +33,7 @@ Utiliza el ```pre_posting_hook``` para verificar si la denominación de todas la
 
 Vamos a añadir este código a nuestro Smart Contract del ejercicio ```tutorial_contract.py```
 
+
 ```python
 from typing import Union
 from contracts_api import (
@@ -77,7 +49,9 @@ version = "1.0.0"
 def pre_posting_hook(
    vault, hook_arguments: PrePostingHookArguments
 ) -> Union[PrePostingHookResult, None]:
-   # Insert your code here.
+   # Inserte su código aquí para poder procesar el pre-posting hook
 
 ```
+
+El propósito de este ejercicio es que creemos un bloque de código que vaya dentro de la función pre_posting_hook que permita leer el previo de la publicación del posting, identificar en que moneda se está realizando la transacción y que acepte sólo esta publicación si corresponde con la moneda identificada para la cuenta.
 
