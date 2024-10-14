@@ -92,7 +92,7 @@ def _get_overdraft_fee_postings(overdraft_fee, denomination):
 
 # Funciones Helper Adicionales
 def _get_interest_accrual_postings(vault, effective_datetime):
-   # Insert your code here.
+   # Inserte su Código Aqui para completar el Ejercicio 5
 
 
 def _calculate_accrued_interest(vault, effective_datetime):
