@@ -25,6 +25,8 @@ api = "4.0.0"  # Esto es un SmartContract usando el Contract Language API 4.0.0
 # Definimos la versión del contrato siguiendo las prácticas de versionado semántico
 version = "0.0.1"  # Usamos versionado semántico. Revisar las buenas prácticas para su uso en https://semver.org/
 
+
+
 # Definimos los parámetros del Smart Contract
 parameters = [
   Parameter(
@@ -51,6 +53,29 @@ parameters = [
        display_name="Tarifa cobrada sobre saldos que excedan el limite de sobregiro",  # Nombre para mostrar del parámetro
        default_value=Decimal(20),  # Valor por defecto de la comisión de sobregiro, en este caso 20
    ),
+   # Parámetro Adicional
+   Parameter(
+       name="gross_interest_rate",
+       shape=NumberShape(min_value=0, max_value=1, step=Decimal("0.01")),
+       level=ParameterLevel.TEMPLATE,
+       description="Gross interest rate",
+       display_name="Rate paid on positive balances",
+   ),
+]
+
+# Definimos un recolector de datos para obtener los saldos en el momento de la ejecución efectiva del hook
+data_fetchers = [
+    BalancesObservationFetcher(
+        fetcher_id="latest_balances",  # Identificador del recolector de saldos
+        at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
+    ),
+# Additional data fetcher
+   BalancesObservationFetcher(
+       fetcher_id="end_of_day_balances",
+       at=RelativeDateTime(
+           origin=DefinedDateTime.EFFECTIVE_DATETIME, find=Override(hour=0, minute=0, second=0),
+       ),
+   ),
 ]
 
 # Funciones auxiliares (helpers)
@@ -64,6 +89,37 @@ def _get_overdraft_fee_postings(overdraft_fee, denomination):
        to_account_id="internal_account",  # ID de la cuenta interna donde se depositará la comisión
    )
    return posting_instructions
+
+# Funciones Helper Adicionales
+def _get_interest_accrual_postings(vault, effective_datetime):
+   # Insert your code here.
+
+
+def _calculate_accrued_interest(vault, effective_datetime):
+   denomination = vault.get_parameter_timeseries(name="denomination").latest()
+
+
+   # Obtener el Saldo Efectivo
+   balances= vault.get_balances_observation(fetcher_id="end_of_day_balances").balances
+   effective_balance = balances[
+       BalanceCoordinate(DEFAULT_ADDRESS, DEFAULT_ASSET, denomination, Phase.COMMITTED)
+   ].net
+
+
+   # Obtener la tasa de interés bruta y calcule la tasa diaria
+   gross_interest_rate = vault.get_parameter_timeseries(name="gross_interest_rate").at(at_datetime=effective_datetime)
+   daily_rate = gross_interest_rate/365
+
+
+   accrued_interest = _precision_accrual(effective_balance * daily_rate)
+
+
+   return accrued_interest
+
+def _precision_accrual(amount):
+  return amount.quantize(Decimal('.00001'), rounding=ROUND_HALF_UP)
+
+
 
 # Función para generar instrucciones de transferencia interna de fondos
 # Especifica los detalles de las publicaciones (créditos y débitos) que se deben realizar
@@ -126,13 +182,7 @@ def pre_posting_hook(
         )
     # Si todas las publicaciones están en la denominación permitida, la función devuelve None y la transacción continúa normalmente
     
-# Definimos un recolector de datos para obtener los saldos en el momento de la ejecución efectiva del hook
-data_fetchers = [
-    BalancesObservationFetcher(
-        fetcher_id="latest_balances",  # Identificador del recolector de saldos
-        at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
-    ),
-]
+
 
 # Decorador que indica que el hook requiere acceso a parámetros y balances observados
 @requires(parameters=True)

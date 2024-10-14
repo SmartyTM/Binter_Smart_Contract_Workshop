@@ -2,177 +2,98 @@
 Javier Antoniucci & Luis Gómez - GFT
 ---
 
-# Ejercicio Cuatro - Entendiendo las directivas de hooks y los recolectores de datos
-En este ejercicio, cobramos una comisión si el saldo de la cuenta excede un límite de sobregiro.
+# Ejercicio Cinco - Entendiendo los eventos programados y las direcciones de saldoEn este ejemplo, acumulamos un interés diario a la cuenta.
 
-## Antecedentes
-Cada hook tiene su propio tipo de retorno, lo cual le permite comunicar los resultados de la lógica de negocio al resto de Vault. La mayoría de estos tipos de retorno pueden contener directivas, permitiendo que los hooks afecten el estado de Vault al crear publicaciones, enviar notificaciones o modificar horarios. Sin embargo, el pre-posting hook se considera estar en la "ruta caliente" (hot path), lo que significa que su ejecución debe ser lo más rápida posible. Por esta razón, sus valores de retorno se limitan a rechazos y no contienen directivas.
+Antecedentes
 
-Además de los parámetros, los Smart Contracts suelen necesitar acceder a otros datos, como saldos y publicaciones. La recuperación optimizada de datos nos permite definir de manera precisa qué datos se necesitan, ayudando a mantener la lógica de negocio compacta y mejorando el rendimiento al garantizar que el contrato solo recupere los datos que son necesarios para su ejecución.
+Los Smart Contracts utilizan un concepto llamado **direcciones de saldo (balance addresses)**. Las direcciones de saldo en Vault se definen a través de cuatro atributos clave: activo, denominación, dirección y fase.
 
-El post-posting hook nos permite realizar acciones basadas en la lógica de negocio después de la ejecución de una publicación. Los recolectores de datos nos permiten definir qué intervalos de tiempo o puntos específicos en el tiempo son de interés para la lógica de negocio. En este ejercicio, agregamos una verificación al post-posting hook para cobrar una comisión al cliente si excede su límite de sobregiro. Necesitamos recuperar el saldo comprometido en el momento de la publicación para evaluar correctamente si la cuenta tiene sobregiro después de la publicación.
+- Activo (asset): Clasifica el tipo de fondos de los cuales se mantienen saldos. Por defecto, el activo es COMMERCIAL_BANK_MONEY, aunque se pueden utilizar otros activos según la configuración.
+- Denominación (denomination): Es la unidad en la que se mide un activo, generalmente un código de moneda. Cada cuenta tiene una lista de denominaciones permitidas que restringe las publicaciones que pueden aceptarse.
+- Dirección (address): Permite almacenar saldos separados o particionar el total de fondos de una cuenta. La dirección por defecto es DEFAULT, pero se pueden crear otras según las necesidades del contrato.
+- Fase (phase): Define el estado de los fondos, con valores como POSTING_PHASE_COMMITTED, POSTING_PHASE_PENDING_INCOMING, y POSTING_PHASE_PENDING_OUTGOING. Esto ayuda a diferenciar entre fondos disponibles y fondos reservados, por ejemplo, en una autorización de pago.
 
-## Definición del Ejercicio
-Usa los parámetros ``overdraft_limit`` y ``overdraft_fee``, definidos a continuación, para hacer la lógica de nuestro producto configurable.
+Esto permite al desarrollador del Smart Contract separar el dinero en la cuenta del cliente en "fondos" distintos. Estas direcciones de saldo se pueden utilizar de diversas maneras, por ejemplo, en Smart Contracts que acumulan intereses. Dado que la acumulación de intereses a menudo ocurre en un horario diferente al de la aplicación del interés, los desarrolladores de Smart Contracts suelen colocar el interés acumulado en una dirección separada. De este modo, cuando se aplica el interés, la cantidad de interés acumulado se conoce y se guarda fuera del fondo principal, conocido como DEFAULT_ADDRESS, de la cuenta.
 
-- ``overdraft_limit``: Este parámetro define el límite máximo de sobregiro permitido para la cuenta. Es configurable para que podamos ajustar la cantidad de dinero que un cliente puede sobregirar antes de que se le apliquen comisiones. Esto nos permite personalizar el comportamiento del producto según las necesidades del cliente o las políticas del banco.
+En los Smart Contracts, las tareas basadas en el tiempo, ya sean repetitivas o puntuales, que necesitan realizarse a lo largo del ciclo de vida de una cuenta se denominan eventos programados. Ejemplos típicos de eventos programados son la acumulación diaria de intereses, el pago mensual de intereses o una tarifa anual de la cuenta.
 
-- ``overdraft_fee``: Este parámetro establece la comisión que se cobrará cuando el saldo de la cuenta exceda el límite de sobregiro definido. Al hacer este parámetro configurable, podemos ajustar el costo del sobregiro de acuerdo con las condiciones de mercado, regulaciones, o el perfil de riesgo del cliente.
+Teniendo en cuenta que necesitamos conocer que es un ``Event Type``lo definermos como :
+
+Cada evento programado en un Smart Contract tiene un tipo de evento asociado a él. Cada tipo de evento debe tener un nombre único dentro de cada Smart Contract y puede tener etiquetas opcionales de programación (Scheduler tags). Cada Smart Contract debe incluir una lista de todos los tipos de eventos (SmartContractEventTypes) definidos en sus activation_hook y conversion_hook.
+
+Ahora procederemos a la Implementación de un Evento Programado. Para implementar un evento programado:
+
+- Define el ``event type`` (tipo de evento) en los metadatos del contrato.
+- Define su calendario de ejecución en el ``activation_hook``.
+- Define las acciones a realizar en el ``scheduled_event_hook``. También debes especificar el ``event_type`` como argumento en los decoradores ``@requires`` o ``@fetch_account_data`` del ``scheduled_event_hook``.
+
+Para realizar el ejercicio, completa la función ``_get_interest_accrual_postings`` del bloque de código que viene más abajo.. Esta función instruye la transferencia del monto acumulado desde la dirección "ACCRUED_OUTGOING" de "internal_account" a la dirección "ACCRUED_INCOMING" de la cuenta del cliente, la cual puedes referenciar usando ``vault.account_id``.
+
+Tambien define un evento programado "ACCRUE_INTEREST" que se ejecuta todos los días y llama a ``_get_interest_accrual_postings``.
+
+Añade, primero, estos bloques de código a nuestro ya conocido Smart Contract ``tutorial_contract.py```
 
 ```python
-# Parametros Adicionales
+# Parametro Adicional
    Parameter(
-       name="overdraft_limit",
-       shape=NumberShape(),
+       name="gross_interest_rate",
+       shape=NumberShape(min_value=0, max_value=1, step=Decimal("0.01")),
        level=ParameterLevel.TEMPLATE,
-       description="Limite de Sobregiro",
-       display_name="Sobregiro maximo permitido para esta cuenta",
-       default_value=Decimal(100),
-   ),
-   Parameter(
-       name="overdraft_fee",
-       shape=NumberShape(),
-       level=ParameterLevel.TEMPLATE,
-       description="Tasa por Sobregiro",
-       display_name="Tarifa cobrada sobre saldos que excedan el limite de sobregiro",
-       default_value=Decimal(20),
+       description="Gross interest rate",
+       display_name="Rate paid on positive balances",
    ),
 ```
 
-A continuación incluiremos un ``Helper``. 
-Un `Helper` tiene un papel clave en facilitar ciertas tareas repetitivas o complejas, ayudando a simplificar la lógica de negocio del contrato. Los helpers son funciones auxiliares diseñadas para encapsular funcionalidades comunes y permitir la reutilización del código, haciéndolo más limpio, mantenible y eficiente.
-Este Helper nos ayudará a poder transferir las tasas que se puedan recaudar de un saldo que ha excedido el límite de Sobregiro hasta una cuenta interna del banco.
+También este 
 
-```python
-# Helper functions
-def _get_overdraft_fee_postings(overdraft_fee, denomination):
-   posting_instructions = _make_internal_transfer_instructions(
-       amount=overdraft_fee,
-       denomination=denomination,
-       from_account_id="main_account", # vault.account_id
-       to_account_id="internal_account",
-   )
-   return posting_instructions
-```
-
-y a continuación, añadiremos el bloque de código que creará los Postings (publicaciones en el ledger) de los movimientos que se generan del cobro de las tasas y se transfieren a una cuenta interna.
-
-```python
-def _make_internal_transfer_instructions(
-   amount: Decimal,
-   denomination: str,
-   from_account_id: str,
-   to_account_id: str,
-   from_account_address: str = DEFAULT_ADDRESS,
-   to_account_address: str = DEFAULT_ADDRESS,
-   asset: str = DEFAULT_ASSET,
-)  -> list[CustomInstruction]:
-   postings = [
-       Posting(
-           credit=True,
-           amount=amount,
-           denomination=denomination,
-           account_id=to_account_id,
-           account_address=to_account_address,
-           asset=asset,
-           phase=Phase.COMMITTED,
+```python 
+# Additional data fetcher
+   BalancesObservationFetcher(
+       fetcher_id="end_of_day_balances",
+       at=RelativeDateTime(
+           origin=DefinedDateTime.EFFECTIVE_DATETIME, find=Override(hour=0, minute=0, second=0),
        ),
-       Posting(
-           credit=False,
-           amount=amount,
-           denomination=denomination,
-           account_id=from_account_id,
-           account_address=from_account_address,
-           asset=asset,
-           phase=Phase.COMMITTED,
-       ),
-   ]
-   custom_instruction = CustomInstruction(
-       postings=postings,
-   )
-   return [custom_instruction]
-
+   ),
 ```
 
-El ejercicio tendrá como objetivo, usando todo el código expuesto anteriormente e incorporado al Smart Contract ``tutorial_contract.py``, implementar el ``post_posting_hook`` para realizar lo siguiente:
-
-- **Recuperar los saldos** de la cuenta en el momento de la ejecución del hook mediante la definición de un data_fetcher, un concepto utilizado en los Smart Contracts de Thought Machine Vault para optimizar la recuperación de datos necesarios.
-
-- **Verificar si el saldo neto** COMPROMETIDO (en la dirección de cuenta DEFAULT_ADDRESS y del tipo de activo DEFAULT_ASSET) es mayor que el sobregiro permitido.
-
-- **Cobrar una comisión (Tasa)** si el saldo excede el sobregiro permitido, utilizando las funciones auxiliares proporcionadas.
-
-Introduzca su código en este bloque de código y añadalo conjuntamente a ``tutorial_contract.py```
+y también este Helper, que es donde va usted a añadir el código que completa el ejercicio.
 
 ```python
-data_fetchers = [
-  # Inserte su código aquí para Recuperar el Saldo
-]
+# Funciones Helper Adicionales
+def _get_interest_accrual_postings(vault, effective_datetime):
+   # Insert your code here.
 
-# Inserte su código aquí para requerir los parámetros
-def post_posting_hook(
-  vault, hook_arguments: PostPostingHookArguments
-) -> Union[PostPostingHookResult, None]:
-  # Inserte su código aquí para Verificar y Cobrar una comisión (Tasa)
+
+def _calculate_accrued_interest(vault, effective_datetime):
+   denomination = vault.get_parameter_timeseries(name="denomination").latest()
+
+
+   # Obtener el Saldo Efectivo
+   balances= vault.get_balances_observation(fetcher_id="end_of_day_balances").balances
+   effective_balance = balances[
+       BalanceCoordinate(DEFAULT_ADDRESS, DEFAULT_ASSET, denomination, Phase.COMMITTED)
+   ].net
+
+
+   # Obtener la tasa de interés bruta y calcule la tasa diaria
+   gross_interest_rate = vault.get_parameter_timeseries(name="gross_interest_rate").at(at_datetime=effective_datetime)
+   daily_rate = gross_interest_rate/365
+
+
+   accrued_interest = _precision_accrual(effective_balance * daily_rate)
+
+
+   return accrued_interest
+
+def _precision_accrual(amount):
+  return amount.quantize(Decimal('.00001'), rounding=ROUND_HALF_UP)
+
 ```
 
-Una vez creado el código, utilice este comando de consola para poder comprobar que pasa los tests
+Una vez implementada su solición al problema, no olvide probar con este comando de consola para pasar los tests oportunos.
 
 ```console
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_e04_fee_applied_after_withdrawal
-```
+python3 -m unittest simple_tutorial_tests.TutorialTest.test_e05_execution_schedule
+````
 
-##  Solución
 
-Primero vamos a definir los data_fetchers
-
-```python
-data_fetchers = [
-    BalancesObservationFetcher(
-        fetcher_id="latest_balances",  # Identificador del recolector de saldos
-        at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
-    ),
-]
-```
-
-Después vamos a definir
-
-```python
-@requires(parameters=True)
-@fetch_account_data(balances=["latest_balances"])
-```
-
-Y por último, vamos a definir todo lo necesario en el post_posting
-
-```python
-def post_posting_hook(
-   vault, hook_arguments: PostPostingHookArguments
-) -> Union[PostPostingHookResult, None]:
-   # Obtenemos los valores más recientes de los parámetros
-   denomination = vault.get_parameter_timeseries(name="denomination").latest()  # Denominación permitida
-   overdraft_limit = vault.get_parameter_timeseries(name="overdraft_limit").latest()  # Límite de sobregiro permitido
-   overdraft_fee = vault.get_parameter_timeseries(name="overdraft_fee").latest()  # Comisión por sobregiro
-
-   # Obtenemos los saldos observados mediante el recolector de datos
-   balances = vault.get_balances_observation(fetcher_id="latest_balances").balances
-
-   # Obtenemos el saldo comprometido (neto) para la cuenta en la dirección y el activo predeterminados
-   committed_balances = balances[
-       BalanceCoordinate(DEFAULT_ADDRESS, DEFAULT_ASSET, denomination, Phase.COMMITTED)
-   ]
-   net_committed_balance = committed_balances.net
-
-   # Verificamos si el saldo comprometido es mayor que el límite de sobregiro permitido
-   if -net_committed_balance > overdraft_limit:
-       # Si se excede el límite de sobregiro, generamos las instrucciones para cobrar la comisión de sobregiro
-       overdraft_fee_postings = _get_overdraft_fee_postings(overdraft_fee, denomination)
-       if overdraft_fee_postings:
-           # Devolvemos un resultado del hook que incluye las instrucciones para publicar la comisión
-           return PostPostingHookResult(
-               posting_instructions_directives=[
-                   PostingInstructionsDirective(
-                       posting_instructions=overdraft_fee_postings,
-                   )
-               ]
-           )
-```
