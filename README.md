@@ -2,37 +2,17 @@
 Javier Antoniucci & Luis Gómez - GFT
 ---
 
-# Ejercicio 2 - Entendamos los hooks
+# Ejercicio Tres - Entendiendo los Parámetros y los Requisitos de Hooks
 
-En este ejercicio, restringimos nuestro producto para aceptar solo ingresos en COP (Pesos Colombianos).
-
-**Antecedentes** Los Smart Contracts se basan en el concepto de hooks. 
-Los hooks son funciones de Python que son llamadas por Vault durante eventos específicos en el ciclo de vida del producto. Este ejercicio demuestra cómo se puede usar un hook de pre-publicación para validar una transacción antes de que sea aceptada en el libro mayor de Vault.
-
-Para comprobar que una publicación es válida antes de modificar el saldo de una cuenta, debemos agregar verificaciones en el ``pre_posting_hook``. Esto nos permite rechazar la publicación si no cumple con los criterios necesarios definidos para esta cuenta en la lógica de negocio del Smart Contract.
+En este ejercicio, cambiamos la restricción de denominación para que sea configurable en lugar de estar codificada de forma fija.
 
 
+## Definición de Parámetros en Smart Contracts
+En Thought Machine Vault, los parámetros son valores configurables que **permiten ajustar la lógica de negocio de un Smart Contract sin necesidad de modificar el código directamente.** Los parámetros se definen en el contrato y luego se pueden establecer o actualizar durante la configuración del producto. Esto incluye, por ejemplo, valores como la denominación permitida, límites de transacción, o tasas de interés.
 
-## Uso
-Vamos a usar este comando en nuestro Terminal para poder hacer el test que nos muestre que funciona
+Los parámetros son muy útiles para garantizar la flexibilidad y reutilización de los Smart Contracts, permitiendo adaptar un producto a diferentes condiciones sin tener que reescribir o redeployar el código.
 
-```console
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_e02_wrong_denomination_deposit
-
-```
-
-## ¿Qué es un pre_posting_hook?
-
-En Thought Machine Vault, un ```pre_posting_hook``` es un hook que se ejecuta antes de que una transacción sea aceptada en el sistema. Cuando desarrollamos un Smart Contract, el ```pre_posting_hook``` nos permite implementar lógica que valide ciertos aspectos de una transacción antes de que esta modifique el saldo de una cuenta. Este tipo de hook es crucial para garantizar que se cumplan reglas específicas antes de aceptar cualquier operación, como la validación de la moneda, el límite de transacciones o la verificación de requisitos personalizados.
-
-Para comprobar que una publicación es válida antes de modificar el saldo de una cuenta, debemos agregar verificaciones en el ```pre_posting_hook```. Esto nos permite rechazar la publicación si no cumple con los criterios necesarios definidos para esta cuenta en la lógica de negocio del Smart Contract.
-
-## Ejemplo específico para este ejercicio:
-
-Utiliza el ```pre_posting_hook``` para verificar si la denominación de todas las publicaciones enviadas es en 'COP'. Si no es en 'COP', rechaza la publicación con el código de motivo WRONG_DENOMINATION.
-
-Vamos a añadir este código a nuestro Smart Contract del ejercicio ```tutorial_contract.py```
-
+El ejercicio comienza con añadiendo este bloque de código a nuestro ```tutorial_contract.py``` que estamos usando para estos ejercicios :
 
 ```python
 from typing import Union
@@ -43,42 +23,38 @@ from contracts_api import (
    RejectionReason,
 )
 
-api = "4.0.0"
-version = "1.0.0"
+# Definimos la versión del API que estamos utilizando para este Smart Contract, en este caso es la 4.0.0
+api = "4.0.0"  # Esto es un SmartContract usando el Contract Language API 4.0.0
 
+# Definimos la versión del contrato siguiendo las prácticas de versionado semántico
+version = "0.0.1"  # Usamos versionado semántico. Revisar las buenas prácticas para su uso en https://semver.org/
+
+parameters = [
+  # Defina sus parámetros que precisa para poder pasar el valor de COP u otro tipo de moneda a su Smart Contract
+]
+@requires(parameters=True)
 def pre_posting_hook(
-   vault, hook_arguments: PrePostingHookArguments
+  vault, hook_arguments: PrePostingHookArguments
 ) -> Union[PrePostingHookResult, None]:
-   # Inserte su código aquí para poder procesar el pre-posting hook
-
-```
-
-El propósito de este ejercicio es que creemos un bloque de código que vaya dentro de la función pre_posting_hook que permita leer el previo de la publicación del posting, identificar en que moneda se está realizando la transacción y que acepte sólo esta publicación si corresponde con la moneda identificada para la cuenta.
-
-## La Solución
-
-La solución para este ejercicio se completa con la inserción de este bloque de código:
-
-```python
-   if any(posting.denomination != 'COP' for posting in hook_arguments.posting_instructions):
+   allowed_denomination = # ïndique que Denominación de moneda permite para su uso en este Smart Contract
+   if any(posting.denomination != allowed_denomination for posting in hook_arguments.posting_instructions):
        return PrePostingHookResult(
            rejection=Rejection(
                message="Las transacciones solo pueden ser realizadas en Pesos Colombianos (COP)",
                reason_code=RejectionReason.WRONG_DENOMINATION,
            )
        )
+
 ```
 
-En nuestra solución, iteramos sobre la lista de publicaciones que se pasan a nuestro hook, y devolvemos un rechazo si alguna de ellas no está en COP.
+Compruebe que el ejercicio consta de insertar 2 bloques de código que permitan definir el parámetro y poder usarlo más adelante.
 
-## Explicación adicional:
+Copie este código en ```tutorial_contract.py``` y añada los elementos que faltan.
 
-Cuando estamos utilizando el ```pre_posting_hook``` en un Smart Contract para Thought Machine Vault, es común recibir una lista de publicaciones (es decir, transacciones) que deben ser validadas antes de ser aceptadas. En este caso, nuestro objetivo es asegurarnos de que todas las publicaciones estén denominadas en pesos colombianos (COP). Por ello, recorremos cada elemento de esta lista, y si encontramos alguna publicación que no esté en COP, la rechazamos devolviendo un mensaje de rechazo con el motivo correspondiente. Esto asegura que **solo se acepten transacciones que cumplan con las reglas de negocio definidas para este producto.**
+Una vez tenga finalizado el código, ejecute el test en consola usando :
 
-Para mayor detalle, vuelva a ejecutar el test usando el comando 
 ```console
-python3 -m unittest simple_tutorial_tests.TutorialTest.test_e02_wrong_denomination_deposit
-
+python3 -m unittest simple_tutorial_tests.TutorialTest.test_wrong_denomination_with_parameter_deposit
 ```
 
 
