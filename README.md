@@ -107,7 +107,7 @@ Introduzca su código en este bloque de código y añadalo conjuntamente a ``tut
 ```python
 
 data_fetchers = [
-  # Inserte su código aquí para Recuperar el Saldo
+  # Inserte su código aquí para indicar como Recuperar el Saldo
 ]
 
 
@@ -115,7 +115,7 @@ data_fetchers = [
 def post_posting_hook(
   vault, hook_arguments: PostPostingHookArguments
 ) -> Union[PostPostingHookResult, None]:
-  # Inserte su código aquí para Verificar y Cobrar una comisión (Tasa)
+  # Inserte su código aquí para Recuperar Saldo, Verificar y Cobrar una comisión (Tasa)
 ```
 
 
