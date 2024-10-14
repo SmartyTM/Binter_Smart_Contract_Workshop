@@ -110,3 +110,15 @@ def pre_posting_hook(
             )
         )
     # Si todas las publicaciones están en la denominación permitida, la función devuelve None y la transacción continúa normalmente
+    
+    
+data_fetchers = [
+  # Inserte su código aquí para Recuperar el Saldo
+]
+
+# Inserte su código aquí para requerir los parámetros
+def post_posting_hook(
+  vault, hook_arguments: PostPostingHookArguments
+) -> Union[PostPostingHookResult, None]:
+  # Inserte su código aquí para Verificar y Cobrar una comisión (Tasa)
+  

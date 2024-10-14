@@ -102,6 +102,22 @@ El ejercicio tendrá como objetivo, usando todo el código expuesto anteriorment
 
 - **Cobrar una comisión (Tasa)** si el saldo excede el sobregiro permitido, utilizando las funciones auxiliares proporcionadas.
 
+Introduzca su código en este bloque de código y añadalo conjuntamente a ``tutorial_contract.py```
+
+```python
+
+data_fetchers = [
+  # Inserte su código aquí para Recuperar el Saldo
+]
+
+
+# Inserte su código aquí para requerir los parámetros
+def post_posting_hook(
+  vault, hook_arguments: PostPostingHookArguments
+) -> Union[PostPostingHookResult, None]:
+  # Inserte su código aquí para Verificar y Cobrar una comisión (Tasa)
+```
+
 
 Una vez creado el código, utilice este comando de consola para poder comprobar que pasa los tests
 
