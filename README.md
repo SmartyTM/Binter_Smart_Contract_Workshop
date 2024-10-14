@@ -102,9 +102,72 @@ El ejercicio tendrá como objetivo, usando todo el código expuesto anteriorment
 
 - **Cobrar una comisión (Tasa)** si el saldo excede el sobregiro permitido, utilizando las funciones auxiliares proporcionadas.
 
+Introduzca su código en este bloque de código y añadalo conjuntamente a ``tutorial_contract.py```
+
+```python
+data_fetchers = [
+  # Inserte su código aquí para Recuperar el Saldo
+]
+
+# Inserte su código aquí para requerir los parámetros
+def post_posting_hook(
+  vault, hook_arguments: PostPostingHookArguments
+) -> Union[PostPostingHookResult, None]:
+  # Inserte su código aquí para Verificar y Cobrar una comisión (Tasa)
+```
 
 Una vez creado el código, utilice este comando de consola para poder comprobar que pasa los tests
 
 ```console
 python3 -m unittest simple_tutorial_tests.TutorialTest.test_e04_fee_applied_after_withdrawal
 ```
+
+##  Solución
+
+Primero vamos a definir los data_fetchers
+
+```python
+data_fetchers = [
+   BalancesObservationFetcher(
+       fetcher_id="latest_balances",
+       at=DefinedDateTime.EFFECTIVE_DATETIME,
+   ),
+]
+```
+
+Después vamos a definir
+
+```python
+@requires(parameters=True)
+@fetch_account_data(balances=["latest_balances"])
+```
+
+Y por último, vamos a definir todo lo necesario en el post_posting
+
+```python
+def post_posting_hook(
+   vault, hook_arguments: PostPostingHookArguments
+) -> Union[PostPostingHookResult, None]:
+   # Get latest parameter values
+   denomination = vault.get_parameter_timeseries(name="denomination").latest()
+   overdraft_limit = vault.get_parameter_timeseries(name="overdraft_limit").latest()
+   overdraft_fee = vault.get_parameter_timeseries(name="overdraft_fee").latest()
+   # Fetch balances
+   balances= vault.get_balances_observation(fetcher_id="latest_balances").balances
+   committed_balances = balances[
+       BalanceCoordinate(DEFAULT_ADDRESS, DEFAULT_ASSET, denomination, Phase.COMMITTED)
+   ]
+   net_committed_balance = committed_balances.net
+   # Check if the committed balance is greater than the allowed overdraft
+   if -net_committed_balance > overdraft_limit:
+       # Charge the overdraft fee
+       overdraft_fee_postings = _get_overdraft_fee_postings(overdraft_fee, denomination)
+       if overdraft_fee_postings:
+           return PostPostingHookResult(
+               posting_instructions_directives=[
+                   PostingInstructionsDirective(
+                       posting_instructions=overdraft_fee_postings,
+                   )
+               ]
+           )
+````
