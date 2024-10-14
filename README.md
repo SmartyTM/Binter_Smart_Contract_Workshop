@@ -55,3 +55,19 @@ def pre_posting_hook(
 
 El propósito de este ejercicio es que creemos un bloque de código que vaya dentro de la función pre_posting_hook que permita leer el previo de la publicación del posting, identificar en que moneda se está realizando la transacción y que acepte sólo esta publicación si corresponde con la moneda identificada para la cuenta.
 
+## La Solución
+
+La solución para este ejercicio se completa con la inserción de este bloque de código:
+
+```python
+   if any(posting.denomination != 'COP' for posting in hook_arguments.posting_instructions):
+       return PrePostingHookResult(
+           rejection=Rejection(
+               message="Las transacciones solo pueden ser realizadas en Pesos Colombianos (COP)",
+               reason_code=RejectionReason.WRONG_DENOMINATION,
+           )
+       )
+```
+
+
+
