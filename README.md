@@ -94,6 +94,71 @@ Una vez implementada su solición al problema, no olvide probar con este comando
 
 ```console
 python3 -m unittest simple_tutorial_tests.TutorialTest.test_e05_execution_schedule
-````
+```
+
+## Solución
+
+Para implementar la Solución, comenzaremos con la creación de un Tipo de Evento
+
+```python 
+event_types = [
+   SmartContractEventType(name="ACCRUE_INTEREST"),
+]
+```
+
+Para después crear el activation hook que lanza el evento y completa el proceso en el momento definido.
 
 
+```python
+
+def activation_hook(
+   vault, hook_arguments: ActivationHookArguments
+) -> Union[ActivationHookResult, None]:
+
+
+   # Acumulación de Interest diario a la media noche
+   interest_accrual_event = ScheduledEvent(
+       expression=ScheduleExpression(hour=0, minute=0, second=0),
+       start_datetime=hook_arguments.effective_datetime,
+   )
+
+
+   return ActivationHookResult(
+       scheduled_events_return_value={
+           "ACCRUE_INTEREST": interest_accrual_event,
+       }
+   )
+
+
+@requires(event_type="ACCRUE_INTEREST", parameters=True)
+@fetch_account_data(event_type="ACCRUE_INTEREST", balances=["end_of_day_balances"])
+def scheduled_event_hook(
+   vault, hook_arguments:ScheduledEventHookArguments
+) -> Union[ScheduledEventHookResult, None]:
+if hook_arguments.event_type == "ACCRUE_INTEREST":
+       interest_accrual_postings = _get_interest_accrual_postings(vault, hook_arguments.effective_datetime)
+        if interest_accrual_postings:
+           return ScheduledEventHookResult(
+               posting_instructions_directives=[
+                   PostingInstructionsDirective(
+                       posting_instructions=interest_accrual_postings,
+                   )
+               ],
+           )
+def _get_interest_accrual_postings(vault, effective_datetime):
+   accrued_interest = _calculate_accrued_interest(vault, effective_datetime)
+   denomination = vault.get_parameter_timeseries(name="denomination").latest()
+
+
+   if accrued_interest > 0:
+       posting_instructions = _make_internal_transfer_instructions(
+           amount=accrued_interest,
+           denomination=denomination,
+           from_account_id="internal_account",
+           from_account_address="ACCRUED_OUTGOING",
+           to_account_id=vault.account_id,
+           to_account_address="ACCRUED_INCOMING"
+       )
+       return posting_instructions
+
+```
