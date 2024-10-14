@@ -33,10 +33,30 @@ graph TD
     I2 --> J1[Obtener Publicaciones de Comisión por Sobregiro]
     J1 --> J4
 
-    subgraph Helpers
+    subgraph Ayudantes
         J1[Obtener Publicaciones de Comisión por Sobregiro]
         J2[Obtener Publicaciones de Acumulación de Interés]
         J3[Calcular Interés Acumulado]
         J4[Generar Instrucciones de Transferencia Interna]
     end
+
+    %% Expansión del flujo E2E desde el punto de vista de Negocio
+    Z1[Usuario Abre Cuenta] --> Z2[Inicialización del Smart Contract]
+    Z2 --> A
+    Z1 --> Z3[Usuario Realiza Transacción]
+    Z3 --> H
+    H2 --> |Denominación Correcta| Z4[Procesar Transacción]
+    Z4 --> I
+    I1 --> |Sin Sobregiro| Z5[Transacción Exitosa]
+    I1 --> |Con Sobregiro| I2
+    I2 --> J1
+    J4 --> Z5
+
+    Z1 --> Z6[Intereses Acumulados al Final del Día]
+    Z6 --> G
+    G1 --> J2
+    J4 --> Z7[Aplicar Intereses a la Cuenta del Usuario]
+    Z7 --> Z8[Cuenta Actualizada con Intereses]
+    Z5 --> Z9[Estado Final de la Cuenta]
+    Z8 --> Z9
 ```
