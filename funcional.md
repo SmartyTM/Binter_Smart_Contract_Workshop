@@ -4,10 +4,10 @@ graph TD
     A --> C[Define Data Fetchers]
     A --> D[Define Event Types]
 
-    B --> |Denomination| P1[Parameter: denomination (COP)]
-    B --> |Overdraft Limit| P2[Parameter: overdraft_limit]
-    B --> |Overdraft Fee| P3[Parameter: overdraft_fee]
-    B --> |Gross Interest Rate| P4[Parameter: gross_interest_rate]
+    B --> P1[Parameter: denomination (COP)]
+    B --> P2[Parameter: overdraft_limit]
+    B --> P3[Parameter: overdraft_fee]
+    B --> P4[Parameter: gross_interest_rate]
 
     C --> F1[Fetcher: latest_balances]
     C --> F2[Fetcher: end_of_day_balances]
@@ -18,7 +18,7 @@ graph TD
     E --> E2[Schedule Interest Accrual Event]
 
     A --> G[Scheduled Event Hook]
-    G --> |ACCRUE_INTEREST| G1[Accrue Interest Postings]
+    G --> G1[Accrue Interest Postings]
 
     A --> H[Pre Posting Hook]
     H --> H1[Check Denomination for Transactions]
