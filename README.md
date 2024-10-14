@@ -128,10 +128,10 @@ Primero vamos a definir los data_fetchers
 
 ```python
 data_fetchers = [
-   BalancesObservationFetcher(
-       fetcher_id="latest_balances",
-       at=DefinedDateTime.EFFECTIVE_DATETIME,
-   ),
+    BalancesObservationFetcher(
+        fetcher_id="latest_balances",  # Identificador del recolector de saldos
+        at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
+    ),
 ]
 ```
 
@@ -148,21 +148,26 @@ Y por último, vamos a definir todo lo necesario en el post_posting
 def post_posting_hook(
    vault, hook_arguments: PostPostingHookArguments
 ) -> Union[PostPostingHookResult, None]:
-   # Get latest parameter values
-   denomination = vault.get_parameter_timeseries(name="denomination").latest()
-   overdraft_limit = vault.get_parameter_timeseries(name="overdraft_limit").latest()
-   overdraft_fee = vault.get_parameter_timeseries(name="overdraft_fee").latest()
-   # Fetch balances
-   balances= vault.get_balances_observation(fetcher_id="latest_balances").balances
+   # Obtenemos los valores más recientes de los parámetros
+   denomination = vault.get_parameter_timeseries(name="denomination").latest()  # Denominación permitida
+   overdraft_limit = vault.get_parameter_timeseries(name="overdraft_limit").latest()  # Límite de sobregiro permitido
+   overdraft_fee = vault.get_parameter_timeseries(name="overdraft_fee").latest()  # Comisión por sobregiro
+
+   # Obtenemos los saldos observados mediante el recolector de datos
+   balances = vault.get_balances_observation(fetcher_id="latest_balances").balances
+
+   # Obtenemos el saldo comprometido (neto) para la cuenta en la dirección y el activo predeterminados
    committed_balances = balances[
        BalanceCoordinate(DEFAULT_ADDRESS, DEFAULT_ASSET, denomination, Phase.COMMITTED)
    ]
    net_committed_balance = committed_balances.net
-   # Check if the committed balance is greater than the allowed overdraft
+
+   # Verificamos si el saldo comprometido es mayor que el límite de sobregiro permitido
    if -net_committed_balance > overdraft_limit:
-       # Charge the overdraft fee
+       # Si se excede el límite de sobregiro, generamos las instrucciones para cobrar la comisión de sobregiro
        overdraft_fee_postings = _get_overdraft_fee_postings(overdraft_fee, denomination)
        if overdraft_fee_postings:
+           # Devolvemos un resultado del hook que incluye las instrucciones para publicar la comisión
            return PostPostingHookResult(
                posting_instructions_directives=[
                    PostingInstructionsDirective(
@@ -170,4 +175,4 @@ def post_posting_hook(
                    )
                ]
            )
-````
+```

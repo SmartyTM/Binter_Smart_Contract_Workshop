@@ -126,13 +126,13 @@ def pre_posting_hook(
         )
     # Si todas las publicaciones están en la denominación permitida, la función devuelve None y la transacción continúa normalmente
     
-    # Definimos un recolector de datos para obtener los saldos en el momento de la ejecución efectiva del hook
-    data_fetchers = [
-       BalancesObservationFetcher(
-           fetcher_id="latest_balances",  # Identificador del recolector de saldos
-           at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
-       ),
-    ]
+# Definimos un recolector de datos para obtener los saldos en el momento de la ejecución efectiva del hook
+data_fetchers = [
+    BalancesObservationFetcher(
+        fetcher_id="latest_balances",  # Identificador del recolector de saldos
+        at=DefinedDateTime.EFFECTIVE_DATETIME,  # Momento específico en el que se obtienen los saldos (tiempo efectivo)
+    ),
+]
 
 # Decorador que indica que el hook requiere acceso a parámetros y balances observados
 @requires(parameters=True)
