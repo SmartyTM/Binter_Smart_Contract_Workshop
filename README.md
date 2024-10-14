@@ -69,5 +69,16 @@ La solución para este ejercicio se completa con la inserción de este bloque de
        )
 ```
 
+En nuestra solución, iteramos sobre la lista de publicaciones que se pasan a nuestro hook, y devolvemos un rechazo si alguna de ellas no está en COP.
+
+## Explicación adicional:
+
+Cuando estamos utilizando el ```pre_posting_hook``` en un Smart Contract para Thought Machine Vault, es común recibir una lista de publicaciones (es decir, transacciones) que deben ser validadas antes de ser aceptadas. En este caso, nuestro objetivo es asegurarnos de que todas las publicaciones estén denominadas en pesos colombianos (COP). Por ello, recorremos cada elemento de esta lista, y si encontramos alguna publicación que no esté en COP, la rechazamos devolviendo un mensaje de rechazo con el motivo correspondiente. Esto asegura que **solo se acepten transacciones que cumplan con las reglas de negocio definidas para este producto.**
+
+Para mayor detalle, vuelva a ejecutar el test usando el comando 
+```console
+python3 -m unittest simple_tutorial_tests.TutorialTest.test_e02_wrong_denomination_deposit
+
+```
 
 
