@@ -66,10 +66,10 @@ La solución tiene dos bloques de código que son necesarios.
 ```python
 parameters = [
   Parameter(
-       name='denominacion',
-       shape=DenominationShape(),
-       level=ParameterLevel.TEMPLATE,
-       default_value="COP",
+       name='denominacion',  # Nombre del parámetro, que se utilizará para identificarlo en el Smart Contract
+       shape=DenominationShape(),  # Forma del parámetro, especificando que se trata de una denominación monetaria
+       level=ParameterLevel.TEMPLATE,  # Nivel del parámetro, aquí se establece a nivel de plantilla (TEMPLATE)
+       default_value="COP",  # Valor por defecto del parámetro, que en este caso es 'COP' (Pesos Colombianos)
    ),
 ]
 ```
@@ -79,10 +79,15 @@ parameters = [
 Como segundo paso, definir como usarlo dentro de nuestro anterior bloque de código añadiendo 
 
 ```python
-allowed_denomination = vault.get_parameter_timeseries(name="denominacion").latest()
+    # Obtenemos el valor actual del parámetro 'denominacion' utilizando la serie temporal del parámetro
+    allowed_denomination = vault.get_parameter_timeseries(name="denomination").latest()
 ```
 
-La Resultante de este código finalmente será :
+---
+### Smart Contract Resultante 
+
+Si lo sumamos a todo el código anterior, nuestro Smart Contract luce de esta manera :
+
 
 ```python
 from typing import Union
