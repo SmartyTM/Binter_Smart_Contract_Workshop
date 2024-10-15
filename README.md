@@ -53,5 +53,5 @@ def pre_posting_hook(
 
 ```
 
-El propósito de este ejercicio es que creemos un bloque de código que vaya dentro de la función pre_posting_hook que permita leer el previo de la publicación del posting, identificar en que moneda se está realizando la transacción y que acepte sólo esta publicación si corresponde con la moneda identificada para la cuenta.
+El propósito de este ejercicio es que creemos un bloque de código que vaya dentro de la función ``pre_posting_hook`` que permita leer el previo de la publicación del posting, identificar en que moneda se está realizando la transacción y que acepte sólo esta publicación si corresponde con la moneda identificada para la cuenta.
 
